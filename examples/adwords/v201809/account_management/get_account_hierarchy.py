@@ -39,6 +39,8 @@ def DisplayAccountTree(account, accounts, links, depth=0):
   """
   prefix = '-' * depth * 2
   print '%s%s, %s' % (prefix, account['customerId'], account['name'])
+#   Python 3 syntax (Uncomment to use):
+  print(prefix, account['customerId'], account['name'])
   if account['customerId'] in links:
     for child_link in links[account['customerId']]:
       child_account = accounts[child_link['clientCustomerId']]
@@ -48,7 +50,7 @@ def DisplayAccountTree(account, accounts, links, depth=0):
 def main(client):
   # Initialize appropriate service.
   managed_customer_service = client.GetService(
-      'ManagedCustomerService', version='v201809')
+      'ManagedCustomerService', version='v201809')  # 2018/09/29: seems like the v201809 is not currently fully migrated, 'v201806' will work just fine (for now)
 
   # Construct selector to get all accounts.
   offset = 0
@@ -64,10 +66,22 @@ def main(client):
   child_links = {}
   parent_links = {}
   root_account = None
+#   Handle cases where total entries returned is fewer than PAGE_SIZE:
+  page = managed_customer_service.get(selector)
+  get_account_hierachyr(page)
+  if page['totalNumEntries'] <= PAGE_SIZE:
+    more_pages = False
 
   while more_pages:
+    # Alter the selector params.
+    offset += PAGE_SIZE
+    selector['paging']['startIndex'] = str(offset)
+    more_pages = offset < int(page['totalNumEntries'])
     # Get serviced account graph.
     page = managed_customer_service.get(selector)
+    get_account_hierarchy(page)
+    
+  def get_account_hierarchy(page):
     if 'entries' in page and page['entries']:
       # Create map from customerId to parent and child links.
       if 'links' in page:
@@ -81,9 +95,7 @@ def main(client):
       # Map from customerID to account.
       for account in page['entries']:
         accounts[account['customerId']] = account
-    offset += PAGE_SIZE
-    selector['paging']['startIndex'] = str(offset)
-    more_pages = offset < int(page['totalNumEntries'])
+
 
   # Find the root account.
   for customer_id in accounts:
@@ -93,12 +105,18 @@ def main(client):
   # Display account tree.
   if root_account:
     print 'CustomerId, Name'
+  # Python 3 syntax:
+#     print('CustomerID, Name')
     DisplayAccountTree(root_account, accounts, child_links, 0)
   else:
     print 'Unable to determine a root account'
+  # Python 3 syntax:
+#     print('Unable to determine a root account')
 
 
 if __name__ == '__main__':
   # Initialize client object.
   adwords_client = adwords.AdWordsClient.LoadFromStorage()
+  # SetClientCustomerId:
+#   adwords_client.SetClientCustomerId(str(<INSERT_YOUR_MANAGER_ACCOUNT_ID>))
   main(adwords_client)
